@@ -8,6 +8,8 @@ Loading a resume rewrites this file, and the rewrite drops the comments you put 
 
 With the environment variable `AIHAWK_DRY_RUN` set to anything, an application stops once the form is filled and the send control is found: the job is recorded as blocked, with a screenshot, and nothing reaches the employer. Every step the model took on the page is written to `data/trace.log`, with the account password hidden; `AIHAWK_TRACE` set alone writes that file for real applications too. For trying a site or a plugin with a test CV.
 
+Set `AIHAWK_HEADLESS=1` to run the browser without a visible window (the default is headed, so the person can watch). The headless path was exercised on the real-browser test on 2026-11-11.
+
 ## What it costs
 
 AIHawk counts the tokens of every model call and prices them with the gateway's own list, read once per start. The details of each application, on `s`, say what it cost. Jev's calls, which score the jobs, are not counted: they go through another endpoint and cost under a cent per hundred postings.
@@ -18,7 +20,7 @@ A site that needs a candidate account, such as Workday, gets one made with your 
 
 ## Your answers
 
-What the forms are told about you beyond the CV (email, phone, location, links, and anything you add) lives in the `answers` table of `data/jobs.db`, the SQLite file in the AIHawk folder. Press `e`, then "Your answers", to see, change or add them; an answer you gave is kept when a new resume is read. `email` and `mail_provider` (gmail or outlook) are the mailbox AIHawk opens for you to sign in to, asked once after the resume and again from "Your mail" in Settings; a site's code can only be read from a mailbox you are signed in to. AIHawk makes an `account_password` the first time it starts and keeps it there: the one password it uses on job sites that need an account, such as Workday, so you can sign in to those sites yourself. It is kept sealed, encrypted with a key in `data/secret.key`, and shown plain under "Your answers". The `answers.yaml` of earlier versions is read once, brought into the table and renamed `answers.yaml.imported`.
+What the forms are told about you beyond the CV (email, phone, location, links, and anything you add) lives in the `answers` table of `data/jobs.db`, the SQLite file in the AIHawk folder. Press `e`, then "Your answers", to see, change or add them; an answer you gave is kept when a new resume is read. `email` and `mail_provider` (gmail, outlook, or cloudflare) are the mailbox AIHawk reads for codes, asked once after the resume and again from "Your mail" in Settings. A Cloudflare inbox is authenticated by the URL in `AIHAWK_INBOX_URL`; see `docs/cloudflare-inbox.md`. AIHawk makes an `account_password` the first time it starts and keeps it there: the one password it uses on job sites that need an account, such as Workday, so you can sign in to those sites yourself. It is kept sealed, encrypted with a key in `data/secret.key`, and shown plain under "Your answers". The `answers.yaml` of earlier versions is read once, brought into the table and renamed `answers.yaml.imported`.
 
 | Key | Default | What it does |
 |---|---|---|

@@ -19,7 +19,7 @@ from dataclasses import asdict, dataclass, field, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Protocol
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 
 import openai
 from mcp import ClientSession, StdioServerParameters
@@ -82,7 +82,15 @@ MAIL_NOT_SIGNED_IN = "The mailbox is not signed in."
 # Set in the environment, every step the model takes on a page is written to data/trace.log; a dry run always is.
 TRACE_ENV = "AIHAWK_TRACE"
 # The mailboxes a code can be read from: where each opens, and the host a signed-in one stays on (its sign-in page is elsewhere).
-MAILBOXES = {"gmail": ("https://mail.google.com/mail/u/0/", "mail.google.com"), "outlook": ("https://outlook.live.com/mail/", "outlook.live.com")}
+# Cloudflare is a hosted inbox, not a mail provider: its URL is read from AIHAWK_INBOX_URL and is already authenticated.
+CLOUDFLARE = "cloudflare"
+CLOUDFLARE_INBOX_URL_ENV = "AIHAWK_INBOX_URL"
+MAILBOXES = {
+    "gmail": ("https://mail.google.com/mail/u/0/", "mail.google.com"),
+    "outlook": ("https://outlook.live.com/mail/", "outlook.live.com"),
+    CLOUDFLARE: ("", ""),
+}
+MAILBOX_PLUGINS = frozenset({"gmail", "outlook", CLOUDFLARE})
 MAIL_DOMAINS = {
     "gmail.com": "gmail", "googlemail.com": "gmail",
     "outlook.com": "outlook", "outlook.it": "outlook", "hotmail.com": "outlook", "hotmail.it": "outlook", "live.com": "outlook", "live.it": "outlook", "msn.com": "outlook",
@@ -546,8 +554,19 @@ class _Traced:
 
 
 def _secrets_in(answers: str) -> tuple[str, ...]:
-    """The values a trace must not show: the account password among the answers."""
-    return tuple(line.split(":", 1)[1].strip() for line in answers.splitlines() if line.startswith("account_password:"))
+    """The values a trace must not show: the account password and the authenticated inbox URL."""
+    values = [
+        line.split(":", 1)[1].strip()
+        for line in answers.splitlines()
+        if line.startswith(("account_password:", "mail_url:"))
+    ]
+    inbox = cloudflare_inbox_url()
+    if inbox:
+        values.append(inbox)
+        token = parse_qs(urlsplit(inbox).query).get("token", [""])[0]
+        if token:
+            values.append(token)
+    return tuple(value for value in values if value)
 
 
 async def run_on_page(
@@ -616,7 +635,7 @@ def server_parameters(upload_dir: Path, home: Path) -> StdioServerParameters:
         "INVISIBLE_MCP_UPLOAD_DIRS": str(upload_dir),
         "INVISIBLE_MCP_HOME": str(home),
         # The person sees the window: what is done in their name happens in front of them.
-        "STEALTHFOX_HEADLESS": "0",
+        "STEALTHFOX_HEADLESS": "1" if os.environ.get("AIHAWK_HEADLESS", "").strip().lower() in ("1", "true", "yes") else "0",
     }
     return StdioServerParameters(command=sys.executable, args=["-m", "invisible_playwright_mcp"], env=environment)
 
@@ -684,9 +703,19 @@ def _account_line(job: Job, account: tuple[str, str] | None) -> str:
     return f"Your account on {site}: made on {made_at[:10]} with {email}, and the account_password from the answers."
 
 
+def cloudflare_inbox_url() -> str:
+    """The configured Cloudflare inbox URL, or empty when it is missing or not HTTPS."""
+    url = os.environ.get(CLOUDFLARE_INBOX_URL_ENV, "").strip()
+    return url if url.startswith("https://") else ""
+
+
 def _is_mailbox(url: str) -> bool:
     host = (urlsplit(url).hostname or "").lower()
-    return any(host == known for _, known in MAILBOXES.values())
+    hosts = {known for _, known in MAILBOXES.values() if known}
+    configured = (urlsplit(cloudflare_inbox_url()).hostname or "").lower()
+    if configured:
+        hosts.add(configured)
+    return host in hosts
 
 
 def mail_provider(email: str) -> str:
@@ -696,6 +725,9 @@ def mail_provider(email: str) -> str:
 
 def signed_in(provider: str, url: str) -> bool:
     """A mailbox opened at its address and still there is signed in; one that sent the browser to a sign-in page is not."""
+    if provider == CLOUDFLARE:
+        configured = (urlsplit(cloudflare_inbox_url()).hostname or "").lower()
+        return bool(configured) and (urlsplit(url).hostname or "").lower() == configured
     return (urlsplit(url).hostname or "").lower() == MAILBOXES[provider][1]
 
 

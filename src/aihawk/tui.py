@@ -14,7 +14,7 @@ from textual.binding import Binding
 from textual.containers import Horizontal
 from textual.widgets import DataTable, Footer, Static
 
-from aihawk.apply import MAILBOXES, Outcome, mail_provider, why_not_sent
+from aihawk.apply import CLOUDFLARE, MAILBOXES, Outcome, cloudflare_inbox_url, mail_provider, why_not_sent
 from aihawk.config import KEY_ENV, KEY_URL, ConfigError
 from aihawk.database import DatabaseError
 from aihawk.library import LibraryError
@@ -54,9 +54,9 @@ KEY_HINT = (
     "It stays on this computer · Enter saves · Esc later"
 )
 MAIL_LATER = "Mail left for later: e, then Your mail."
-MAIL_NAMES = {"gmail": "Gmail", "outlook": "Outlook"}
+MAIL_NAMES = {"gmail": "Gmail", "outlook": "Outlook", CLOUDFLARE: "Cloudflare inbox"}
 RESUME_HINT = "PDF, .docx or text · Enter reads it · Esc later"
-MAIL_UNREADABLE = "Only Gmail and Outlook can be read for now; the rest works without."
+MAIL_UNREADABLE = "Only Gmail, Outlook, or a configured Cloudflare inbox can be read; the rest works without."
 SENDING = "Applications are being sent: wait for them to finish."
 NO_KEY = "No key yet. Press e, then OrcaRouter key."
 NO_RESUME = "No resume yet. Press r and give the file."
@@ -678,7 +678,7 @@ class AIHawk(App[None]):
         provider = mail_provider(email) or (provider if provider in MAILBOXES else "")
         if provider not in MAILBOXES:
             # A company's own address may still be a Gmail or an Outlook inbox: asked once, and left for later when it is not.
-            choice = await self.push_screen_wait(TextPrompt(f"Where is {email}?", placeholder="gmail", hint="gmail or outlook · Enter · Esc later"))
+            choice = await self.push_screen_wait(TextPrompt(f"Where is {email}?", placeholder="gmail", hint="gmail, outlook, or cloudflare · Enter · Esc later"))
             if choice is None:
                 session.set_mail(email, "later")
                 self.say(MAIL_LATER)
@@ -689,6 +689,15 @@ class AIHawk(App[None]):
                 self.say(MAIL_UNREADABLE)
                 return False
         session.set_mail(email, provider)
+        if provider == CLOUDFLARE:
+            inbox = cloudflare_inbox_url()
+            if not inbox:
+                session.set_mail(email, "later")
+                self.say("Set AIHAWK_INBOX_URL to the deployed inbox URL, then set the mail again.")
+                return False
+            session.store.set_answer("mail_url", inbox)
+            self.say(f"Cloudflare inbox configured for {email}.")
+            return True
         name = MAIL_NAMES[provider]
         while True:
             self.signing_in = True

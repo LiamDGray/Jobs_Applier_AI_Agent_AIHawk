@@ -11,7 +11,7 @@ from pathlib import Path
 
 from openai import AsyncOpenAI
 
-from aihawk.apply import MAILBOXES, Outcome, apply_to_job, signed_in, site_of
+from aihawk.apply import CLOUDFLARE, MAILBOX_PLUGINS, MAILBOXES, Outcome, apply_to_job, cloudflare_inbox_url, signed_in, site_of
 from aihawk.apply import sign_in as sign_in_browser
 from aihawk.config import KEY_ENV, Config, ConfigError, load_config
 from aihawk.database import load_manifest, search
@@ -95,6 +95,8 @@ class Session:
 
     async def sign_in_mail(self, provider: str, wait: Callable[[], Awaitable[None]]) -> bool:
         """The mailbox open in the browser for the person to sign in, until `wait` returns; whether the inbox was reached."""
+        if provider == CLOUDFLARE:
+            return bool(cloudflare_inbox_url())
         url, _ = MAILBOXES[provider]
         where = await sign_in_browser(self.config.browser_profile, self.config.data_dir / "browser", wait, url)
         return signed_in(provider, where)
@@ -198,7 +200,7 @@ class Session:
         answers = self.store.answers_text()
         host = site_of(job.apply_url)
         account = self.store.account(host)
-        guidance = _guidance(plugin, always_plugins(self.plugins))
+        guidance = _guidance(plugin, always_plugins(self.plugins), self.store.answers().get("mail_provider", ""))
         # The gateway's price list, read once, so each call's cost can be counted.
         await SPEND.load_prices(self.client)
         mark = SPEND.mark()
@@ -239,10 +241,19 @@ class Session:
         return used
 
 
-def _guidance(plugin: Plugin | None, everywhere: tuple[Plugin, ...]) -> str:
+def _guidance(plugin: Plugin | None, everywhere: tuple[Plugin, ...], mail_provider: str = "") -> str:
     """What the model is told about the site: its own plugin first, then the ones that hold on every site, under a line that
-    says which is which."""
-    held = "\n\n".join(extra.instructions for extra in everywhere)
+    says which is which. Only the configured mailbox plugin is included."""
+    kept = []
+    for extra in everywhere:
+        if extra.name in MAILBOX_PLUGINS:
+            if mail_provider == CLOUDFLARE:
+                if extra.name != CLOUDFLARE:
+                    continue
+            elif extra.name == CLOUDFLARE:
+                continue
+        kept.append(extra.instructions)
+    held = "\n\n".join(kept)
     return "\n\n".join([*([plugin.instructions] if plugin else []), *([f"On every site, not only this one:\n\n{held}"] if held else [])])
 
 

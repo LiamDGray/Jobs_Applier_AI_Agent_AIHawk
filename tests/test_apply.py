@@ -53,6 +53,12 @@ def test_the_browser_is_given_the_environment_without_the_model_key(tmp_path: Pa
     assert "ORCAROUTER_API_KEY" not in environment and environment["PATH_ALIKE"] == "kept"
 
 
+def test_the_browser_can_be_asked_to_run_headless(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("AIHAWK_HEADLESS", "1")
+    environment = server_parameters(tmp_path, tmp_path).env
+    assert environment["STEALTHFOX_HEADLESS"] == "1"
+
+
 @pytest.fixture(autouse=True)
 def no_wait_for_a_send(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(apply_module, "SEND_POLL_S", 0)
@@ -574,6 +580,36 @@ def test_a_mailbox_still_at_its_own_address_is_signed_in_and_one_sent_to_a_sign_
     assert not apply_module.signed_in("gmail", "https://accounts.google.com/v3/signin/identifier?continue=https://mail.google.com")
     assert apply_module.signed_in("outlook", "https://outlook.live.com/mail/0/")
     assert not apply_module.signed_in("outlook", "https://login.live.com/login.srf")
+
+
+def test_the_cloudflare_inbox_is_signed_in_when_its_configured_host_is_reached(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("AIHAWK_INBOX_URL", "https://jerbs-inbox.mrgray.workers.dev/inbox?token=secret")
+    assert apply_module.signed_in("cloudflare", "https://jerbs-inbox.mrgray.workers.dev/inbox?token=secret")
+    assert not apply_module.signed_in("cloudflare", "https://example.com/inbox")
+    assert apply_module._is_mailbox("https://jerbs-inbox.mrgray.workers.dev/inbox?token=secret")
+
+
+def test_the_cloudflare_inbox_needs_a_configured_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("AIHAWK_INBOX_URL", raising=False)
+    assert not apply_module.signed_in("cloudflare", "https://jerbs-inbox.mrgray.workers.dev/inbox")
+    assert not apply_module._is_mailbox("https://jerbs-inbox.mrgray.workers.dev/inbox")
+
+
+def test_guidance_includes_only_the_configured_mailbox_plugin(monkeypatch: pytest.MonkeyPatch) -> None:
+    from aihawk.plugins import always_plugins, load_plugins
+    from aihawk.session import _guidance
+
+    monkeypatch.setenv("AIHAWK_INBOX_URL", "https://jerbs-inbox.mrgray.workers.dev/inbox?token=secret")
+    plugins = load_plugins()
+    text = _guidance(None, always_plugins(plugins), "cloudflare")
+    assert "Cloudflare" in text
+    assert "Gmail searches through its address" not in text
+    assert "https://outlook.live.com/mail/0/" not in text
+
+
+def test_the_mail_url_is_redacted_from_the_trace() -> None:
+    secrets = apply_module._secrets_in("mail_url: https://inbox.example/?token=secret\naccount_password: pw")
+    assert "https://inbox.example/?token=secret" in secrets
 
 
 def test_sign_in_on_a_mailbox_opens_it_and_says_where_the_page_is_after_the_person_is_done(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

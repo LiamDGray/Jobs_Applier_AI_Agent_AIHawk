@@ -1582,7 +1582,7 @@ def test_the_mail_question_is_plain_and_an_address_that_is_neither_gmail_nor_out
             await pilot.pause(0.2)
             # Said once, and left for later: it is not asked again.
             assert not isinstance(app.screen, TextPrompt)
-            assert app.query_one(Said).said.count("Only Gmail and Outlook can be read for now; the rest works without.") == 1
+            assert app.query_one(Said).said.count("Only Gmail, Outlook, or a configured Cloudflare inbox can be read; the rest works without.") == 1
             assert app.session.mail()[1] == "later"
 
     asyncio.run(run())

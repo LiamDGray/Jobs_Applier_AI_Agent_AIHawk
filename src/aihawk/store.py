@@ -42,9 +42,9 @@ CREATE TABLE IF NOT EXISTS jobs (
 # The one password AIHawk makes for the job sites that need an account. Kept sealed: encrypted in the store with a key in
 # its own file beside it, and opened only when an answer is read.
 ACCOUNT_PASSWORD = "account_password"
-SECRET_ANSWERS = frozenset({ACCOUNT_PASSWORD})
+SECRET_ANSWERS = frozenset({ACCOUNT_PASSWORD, "mail_url"})
 # Answers AIHawk keeps for itself: the person is never shown or counted them with their own.
-OWN_ANSWERS = frozenset({ACCOUNT_PASSWORD, "mail_provider"})
+OWN_ANSWERS = frozenset({ACCOUNT_PASSWORD, "mail_provider", "mail_url"})
 
 ACCOUNTS_SCHEMA = """
 CREATE TABLE IF NOT EXISTS accounts (
