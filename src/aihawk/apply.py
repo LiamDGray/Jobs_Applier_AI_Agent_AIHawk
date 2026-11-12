@@ -169,9 +169,11 @@ You fill in one job application form in a browser, for the candidate, from the C
 - Tick the boxes the form requires.
 - Decline optional demographic questions (gender, ethnicity, disability, veteran status) with the form's "prefer not
   to say" option unless the answers text gives an answer.
-- Upload the CV file at the path given to you to the resume field. Read the page with browser_snapshot before acting
-  on it. A file input the page hides refuses the file, and the tool says so: give it instead to the button or label
-  that opens the chooser, which is often `[aria-labelledby="<the input's label id>"] button`.
+- Upload each file at the paths given to you only to the field whose label asks for it. The CV goes to the resume
+  field; a certificate, clearance, or letter goes only to its matching field, never into the resume field. Read the
+  page with browser_snapshot before acting on it. A file input the page hides refuses the file, and the tool says so:
+  give it instead to the button or label that opens the chooser, which is often
+  `[aria-labelledby="<the input's label id>"] button`.
 - Do not send the application yourself. When every required field is filled, call finish_form with status ready and the
   CSS selector of the submit control. Status ready needs that selector: with no selector for it, report blocked.
 - An action that leaves the page as it was will not work the second time: never repeat it, do something else. A key that
@@ -582,9 +584,14 @@ async def run_on_page(
     guidance: str = "",
     page_rules: str = "",
     account: tuple[str, str] | None = None,
+    extra_files: tuple[Path, ...] = (),
 ) -> Outcome:
+    files = f"The CV file to upload: {cv_file}\n"
+    if extra_files:
+        files += "Other files you may upload, each only to the field whose label asks for it (never put one file in another's field):\n"
+        files += "".join(f"- {path.name}: {path}\n" for path in extra_files)
     brief = (
-        f"The form: {job.apply_url}\nThe job: {job.title} at {job.company}\nThe CV file to upload: {cv_file}\n"
+        f"The form: {job.apply_url}\nThe job: {job.title} at {job.company}\n{files}"
         f"{_account_line(job, account)}\n\nThe CV:\n{cv_text}\n\nThe answers:\n{answers}"
     )
     trial = dry_run()
@@ -669,10 +676,12 @@ async def apply_to_job(
     profile: Path,
     guidance: str = "",
     account: tuple[str, str] | None = None,
+    extra_files: tuple[Path, ...] = (),
+    upload_dir: Path | None = None,
 ) -> Outcome:
     """Open the browser on the person's profile, fill the job's form and send it: the person's selection and Enter came before."""
     shot = data_dir / "proofs" / f"{safe_name(job.id)}.png"
-    async with _server(cv_file.parent, data_dir / "browser") as (session, page_rules):
+    async with _server(upload_dir or cv_file.parent, data_dir / "browser") as (session, page_rules):
         listed = await session.list_tools()
         tools = [
             {"type": "function", "function": {"name": tool.name, "description": tool.description or tool.name, "parameters": tool.inputSchema}}
@@ -684,7 +693,7 @@ async def apply_to_job(
             navigated = await session.call_tool("browser_navigate", {"url": job.apply_url})
             if navigated.isError:
                 return Outcome("blocked", f"the form did not load: {tool_text(navigated)}", reason=FORM_NOT_LOADED)
-            return await run_on_page(session, tools, client, model, job, cv_text, answers, cv_file, shot, guidance, page_rules, account)
+            return await run_on_page(session, tools, client, model, job, cv_text, answers, cv_file, shot, guidance, page_rules, account, extra_files)
         finally:
             await session.call_tool("browser_close", {})
 

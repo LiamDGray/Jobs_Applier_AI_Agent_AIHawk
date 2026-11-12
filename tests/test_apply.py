@@ -571,6 +571,29 @@ def test_what_goes_wrong_in_the_browser_comes_out_as_itself(tmp_path: Path, monk
         asyncio.run(inside())
 
 
+def test_extra_documents_are_named_for_the_model(tmp_path: Path) -> None:
+    cert = tmp_path / "certificate.pdf"
+    cert.write_bytes(b"%PDF-1.4 cert")
+    browser = ScriptedBrowser({"#send": SUBMIT}, page={"url": "https://u/apply", "text": "the form"})
+    model = ScriptedModel([tool_call("finish_form", status="ready", summary="filled", submit_selector="#send")])
+    asyncio.run(
+        run_on_page(
+            browser,
+            [],
+            model,
+            "m",
+            JOB,
+            "cv",
+            "a",
+            tmp_path / "cv.pdf",
+            tmp_path / "proof.png",
+            extra_files=(cert,),
+        )
+    )
+    brief = model.requests[0]["messages"][1]["content"]
+    assert "certificate.pdf" in brief and str(cert) in brief
+
+
 def test_a_dry_run_fills_the_form_names_the_send_control_and_sends_nothing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     # A trial of a site or a plugin with a test CV: the environment variable stops the application before the click.
     monkeypatch.setenv(DRY_RUN_ENV, "1")

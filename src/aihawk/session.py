@@ -176,6 +176,13 @@ class Session:
             raise ConfigError("your CV file is not kept: load your resume again")
         return kept[0]
 
+    def _documents(self) -> tuple[Path, ...]:
+        """Other documents the person put in data/documents: certificates, clearances, letters."""
+        folder = self.config.data_dir / "documents"
+        if not folder.is_dir():
+            return ()
+        return tuple(path for path in sorted(folder.iterdir()) if path.is_file())
+
     async def send(
         self, items: list[Stored], log: Log, begin: Callable[[int, int, Stored], None], done: Callable[[Stored, Outcome], None]
     ) -> list[tuple[Stored, Outcome]]:
@@ -208,7 +215,8 @@ class Session:
         try:
             cv_file = self._own_cv()
             outcome = await apply_to_job(
-                self.client, self.config.model, job, cv, answers, cv_file, self.config.data_dir, self.config.browser_profile, guidance, account)
+                self.client, self.config.model, job, cv, answers, cv_file, self.config.data_dir, self.config.browser_profile, guidance, account,
+                extra_files=self._documents(), upload_dir=self.config.data_dir)
         except Exception as error:
             # One job's failure is reported and recorded; the next job still runs.
             if refused(error):
