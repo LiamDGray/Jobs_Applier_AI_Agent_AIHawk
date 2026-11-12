@@ -28,6 +28,8 @@ It requires `INBOX_TOKEN` and returns `401` without it.
 
 4. AIHawk stores the authenticated URL as the sealed `mail_url` answer and uses the `cloudflare.md` mailbox plugin on every form. It does not open a sign-in page and does not ask for a Gmail or Outlook password.
 
+For an unattended run, also set `AIHAWK_HEADLESS=1` so the browser window does not open. The real-browser test passes with that setting (2026-11-11).
+
 ## Notes
 
 - `AIHAWK_INBOX_URL` must be HTTPS; the provider refuses anything else.
