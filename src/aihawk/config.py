@@ -12,7 +12,10 @@ import yaml
 CONFIG_FILE = "aihawk.yaml"
 KEY_FILE = "key"
 DEFAULT_BASE_URL = "https://api.orcarouter.ai/v1"
+# The endpoint can be any OpenAI-compatible gateway: OrcaRouter, the local router-proxy, Cloudflare's OpenAI-compatible API.
+BASE_URL_ENV = "AIHAWK_BASE_URL"
 # The variable that holds the model key, unless the settings name another. The browser is given no variable that holds a key.
+API_KEY_ENV = "AIHAWK_API_KEY"
 KEY_ENV = "ORCAROUTER_API_KEY"
 # Where a person gets a key. A referral link, as the README says: AIHawk gets a share of what is spent through it.
 KEY_URL = "https://www.orcarouter.ai/ref/ref_accd17afb78fc95ac4d7"
@@ -94,6 +97,7 @@ class Config:
     model: str = DEFAULT_MODEL
     quick_model: str = DEFAULT_QUICK_MODEL
     decision_model: str = DEFAULT_DECISION_MODEL
+    base_url: str = DEFAULT_BASE_URL
     filters: Filters = field(default_factory=Filters)
 
     @property
@@ -123,14 +127,15 @@ class Config:
         return self.workspace / "browser-profile"
 
     def api_key(self) -> str:
-        """The model's key: from the environment, or the one the person typed in."""
-        from_environment = os.environ.get(KEY_ENV, "").strip()
-        if from_environment:
-            return from_environment
+        """The model's key: AIHAWK_API_KEY, then ORCAROUTER_API_KEY, then the one the person typed in."""
+        for name in (API_KEY_ENV, KEY_ENV):
+            from_environment = os.environ.get(name, "").strip()
+            if from_environment:
+                return from_environment
         return self.key_file.read_text(encoding="utf-8-sig").strip() if self.key_file.is_file() else ""
 
     def key_from_environment(self) -> bool:
-        return bool(os.environ.get(KEY_ENV, "").strip())
+        return any(os.environ.get(name, "").strip() for name in (API_KEY_ENV, KEY_ENV))
 
     def save_key(self, key: str) -> None:
         self.workspace.mkdir(parents=True, exist_ok=True)
@@ -235,7 +240,7 @@ def load_config(workspace: Path) -> Config:
     """The settings in the folder. Nothing there yet is a new search, not an error."""
     path = workspace / CONFIG_FILE
     if not path.is_file():
-        return Config(workspace=workspace)
+        return Config(workspace=workspace, base_url=os.environ.get(BASE_URL_ENV) or DEFAULT_BASE_URL)
     try:
         raw = yaml.safe_load(path.read_text(encoding="utf-8-sig")) or {}
     except yaml.YAMLError as error:
@@ -254,6 +259,7 @@ def load_config(workspace: Path) -> Config:
         model=str(raw.get("model") or DEFAULT_MODEL),
         quick_model=str(raw.get("quick_model") or DEFAULT_QUICK_MODEL),
         decision_model=str(raw.get("decision_model") or DEFAULT_DECISION_MODEL),
+        base_url=str(raw.get("base_url") or os.environ.get(BASE_URL_ENV) or DEFAULT_BASE_URL),
         filters=Filters(
             _words(filters.get("include"), "filters.include"),
             _words(filters.get("exclude"), "filters.exclude"),

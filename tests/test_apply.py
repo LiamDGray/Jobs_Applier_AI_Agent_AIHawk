@@ -27,8 +27,9 @@ from aihawk.apply import (
     server_parameters,
     sign_in,
 )
-from aihawk.config import DRY_RUN_ENV
+from aihawk.config import DRY_RUN_ENV, load_config
 from aihawk.database import Job
+from aihawk.llm import make_client
 from fakes import ScriptedBrowser, ScriptedModel, tool_call
 
 JOB = Job("g:a:1", "Acme", "Engineer", "Rome", "https://u", "https://u/apply", "Build things")
@@ -48,9 +49,26 @@ def ready(selector: str = "#send") -> list[Any]:
 
 def test_the_browser_is_given_the_environment_without_the_model_key(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("ORCAROUTER_API_KEY", "secret")
+    monkeypatch.setenv("AIHAWK_API_KEY", "generic-secret")
     monkeypatch.setenv("PATH_ALIKE", "kept")
     environment = server_parameters(tmp_path, tmp_path).env
-    assert "ORCAROUTER_API_KEY" not in environment and environment["PATH_ALIKE"] == "kept"
+    assert "ORCAROUTER_API_KEY" not in environment and "AIHAWK_API_KEY" not in environment
+    assert environment["PATH_ALIKE"] == "kept"
+
+
+def test_a_custom_openai_compatible_gateway_and_key_can_come_from_the_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("AIHAWK_BASE_URL", "http://127.0.0.1:5002/v1")
+    monkeypatch.setenv("AIHAWK_API_KEY", "router-proxy")
+    config = load_config(tmp_path)
+    assert config.base_url == "http://127.0.0.1:5002/v1"
+    assert config.api_key() == "router-proxy"
+
+
+def test_the_client_uses_the_configured_gateway(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("AIHAWK_BASE_URL", "http://127.0.0.1:5002/v1")
+    monkeypatch.setenv("AIHAWK_API_KEY", "router-proxy")
+    client = make_client(load_config(tmp_path))
+    assert str(client.base_url).rstrip("/") == "http://127.0.0.1:5002/v1"
 
 
 def test_the_browser_can_be_asked_to_run_headless(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

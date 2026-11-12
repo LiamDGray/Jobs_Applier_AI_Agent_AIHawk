@@ -10,6 +10,15 @@ With the environment variable `AIHAWK_DRY_RUN` set to anything, an application s
 
 Set `AIHAWK_HEADLESS=1` to run the browser without a visible window (the default is headed, so the person can watch). The headless path was exercised on the real-browser test on 2026-11-11.
 
+The model gateway is OpenAI-compatible. `AIHAWK_BASE_URL` and `AIHAWK_API_KEY` override `base_url` and the key; `ORCAROUTER_API_KEY` is still accepted. For the local router-proxy:
+
+```bash
+export AIHAWK_BASE_URL=http://127.0.0.1:5002/v1
+export AIHAWK_API_KEY=router-proxy
+```
+
+Its `/v1/models` includes `deepseek/deepseek-v4.1-flash`, `google/gemini-3.5-flash`, and `typesafe/jev-router`. Set `decision_model: typesafe/jev-router` for the local router if `typesafe/jev-1.14` is not listed.
+
 ## What it costs
 
 AIHawk counts the tokens of every model call and prices them with the gateway's own list, read once per start. The details of each application, on `s`, say what it cost. Jev's calls, which score the jobs, are not counted: they go through another endpoint and cost under a cent per hundred postings.
@@ -30,6 +39,7 @@ What the forms are told about you beyond the CV (email, phone, location, links, 
 | `model` | `deepseek/deepseek-v4.1-flash` | Fills the application forms. |
 | `quick_model` | `google/gemini-3.5-flash` | Writes the search plan from your CV, and the other short calls of a search. |
 | `decision_model` | `typesafe/jev-1.14` | Jev, which answers for each posting whether it is in line with you; how sure it is makes the score, from 1 to 5. |
+| `base_url` | `https://api.orcarouter.ai/v1` | Any OpenAI-compatible endpoint. `AIHAWK_BASE_URL` overrides it; for the local router-proxy use `http://127.0.0.1:5002/v1`. |
 | `filters.include` | empty | Title words to search for. With no `plan`, each word is one title. AIHawk asks for a resume until there is a CV and at least one of these. Reading a resume writes this and `plan`, and the Settings screen does not offer them: a different search comes from a different resume. |
 | `filters.exclude` | empty | Whole words: a posting whose title has one of them is left out. |
 | `filters.locations` | empty | Places a posting's location must name, as whole words. |
